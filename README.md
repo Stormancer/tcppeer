@@ -115,3 +115,4 @@ TcpPeer instance can be both clients and servers at the same time. It's possible
 3. Add support for SSL!
 4. Refactor the pipe completion code. It's currently a mess. Probably necessary to do 1.
 5. Provides a way to manually start a request after creating the request object to eliminate scheduling when the request body can be fully written before sending.
+6. CI

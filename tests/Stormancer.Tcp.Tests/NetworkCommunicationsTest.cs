@@ -259,18 +259,29 @@ namespace Stormancer.Tcp.Tests
 
             Debug.Assert(server.LocalEndpoints.Any());
 
-            var endpoint = server.LocalEndpoints.First();
+            var endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
             await client.Connect(endpoint);
             //Connecting must have updated clientEndpoint.
             Debug.Assert(clientEndpoint != null);
 
+
+            ReadOnlyMemory<byte> seq = TestSequence();
+
+
             using (var request = server.Send(clientEndpoint, "test", default))
             {
-                var mem = request.Writer.GetMemory();
-                await request.Writer.WriteAsync(mem.Slice(0, 64));
+                for (int i = 0; i < SEGMENTS; i++)
+                {
+                    await request.Writer.WriteAsync(seq.Slice(64 * i, 64));
+                }
+
+
                 request.Writer.Complete();
 
-                await request.Reader.ReadAsync();
+                var readResult = await request.Reader.ReadAtLeastAsync(SEGMENTS * 64);
+
+                ReadOnlyMemory<byte> array = readResult.Buffer.Slice(0, SEGMENTS * 64).ToArray();
+                Debug.Assert(seq.Span.SequenceEqual(array.Span));
             }
 
             server.ShutdownServer();
@@ -292,7 +303,7 @@ namespace Stormancer.Tcp.Tests
 
             Debug.Assert(server.LocalEndpoints.Any());
 
-            var endpoint = server.LocalEndpoints.First();
+            var endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
             await client.Connect(endpoint);
 
 
@@ -336,7 +347,7 @@ namespace Stormancer.Tcp.Tests
 
             Debug.Assert(server.LocalEndpoints.Any());
 
-            var endpoint = server.LocalEndpoints.First();
+            var endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
             await client.Connect(endpoint);
 
 
@@ -381,7 +392,7 @@ namespace Stormancer.Tcp.Tests
 
             Debug.Assert(server.LocalEndpoints.Any());
 
-            var endpoint = server.LocalEndpoints.First();
+            var endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
             await client.Connect(endpoint);
 
 
@@ -424,7 +435,7 @@ namespace Stormancer.Tcp.Tests
 
             Debug.Assert(server.LocalEndpoints.Any());
 
-            var endpoint = server.LocalEndpoints.First();
+            var endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
             await client.Connect(endpoint);
 
 
