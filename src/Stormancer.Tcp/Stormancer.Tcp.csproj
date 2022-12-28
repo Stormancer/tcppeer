@@ -1,0 +1,67 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Company>Stormancer</Company>
+    <Authors>Stormancer</Authors>
+    <Version>5.0.2.1</Version>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Description>High performance request/response TCP networking library used by Stormancer servers.</Description>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PackageProjectUrl>https://www.stormancer.com</PackageProjectUrl>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'">
+    <Version>$(Version)-pre</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageIcon>icon.png</PackageIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="../../res/stormancer_128x128.png" Pack="true" PackagePath="\icon.png" />
+  </ItemGroup>
+
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="7.0.0" />
+    <PackageReference Include="Microsoft.Extensions.ObjectPool" Version="5.0.0" />
+    <PackageReference Include="Pipelines.Sockets.Unofficial" Version="2.2.2" />
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="6.0.0" />
+    <PackageReference Include="System.IO.Pipelines" Version="6.0.3" />
+  </ItemGroup>
+
+  
+  <ItemGroup>
+    <OldNugetPackagesTemp Include="$(ProjectDir)../../output/packages/$(ConfigurationName)/$(ProjectName)*.nupkg" />
+    <NugetPackages Include="$(TargetDir)../$(ProjectName).$(Version).nupkg" />
+    <Pdbs Include="$(TargetDir)*.pdb" />
+    <Assembly Include="$(TargetDir)$(AssemblyName).dll" />
+  </ItemGroup>
+  <Target Name="FindOldNugetPackages" BeforeTargets="PostPack">
+    <PropertyGroup>
+      <NugetRegex>$([System.Text.RegularExpressions.Regex]::Escape($(ProjectName)))(\.\d){3}(\.\d)?(-pre)?</NugetRegex>
+    </PropertyGroup>
+    <ItemGroup>
+      <OldNugetPackages Include="@(OldNugetPackagesTemp)" Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(Filename)', '$(NugetRegex)'))" />
+    </ItemGroup>
+  </Target>
+
+
+
+  <Target Name="PostPack" AfterTargets="Pack">
+    <Delete Files="@(OldNugetPackages)" />
+    <Copy SourceFiles="@(Pdbs)" DestinationFolder="$(ProjectDir)../../output/symbols" />
+    <Copy SourceFiles="@(NugetPackages)" DestinationFolder="$(ProjectDir)../../output/packages" />
+    <Copy SourceFiles="@(Assembly)" DestinationFolder="$(ProjectDir)../../output/assemblies" />
+  </Target>
+
+</Project>
