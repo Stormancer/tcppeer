@@ -26,7 +26,7 @@ using System.Threading.Tasks.Dataflow;
 using System.Threading.Tasks.Sources;
 using System.Xml.Linq;
 
-namespace Stormancer.Tcp
+namespace Stormancer.Tcp.Deprecated
 {
     /// <summary>
     /// Provides a way to configures a TCP Peer instance.
@@ -194,7 +194,7 @@ namespace Stormancer.Tcp
 
         public DateTime Date { get; set; }
 
-        public Metadata Metadata { get; set; }
+        public PeerMetadata Metadata { get; set; }
 
         //public Dictionary<string, string> Metadata { get; set; }
     }
@@ -660,7 +660,7 @@ namespace Stormancer.Tcp
     /// </summary>
     public class RemotePeer
     {
-        internal RemotePeer(SocketConnection? connection, Socket? localSocket, Metadata metadata, bool isRemoteConnectedClient)
+        internal RemotePeer(SocketConnection? connection, Socket? localSocket, PeerMetadata metadata, bool isRemoteConnectedClient)
         {
             Connection = connection;
             LocalSocket = localSocket;
@@ -687,7 +687,7 @@ namespace Stormancer.Tcp
         internal HashSet<PendingOperationInfo> RequestsReceivedFrom { get; } = new HashSet<PendingOperationInfo>();
 
 
-        public Metadata Metadata { get; internal set; }
+        public PeerMetadata Metadata { get; internal set; }
         /// <summary>
         /// Custom state object.
         /// </summary>
@@ -1093,7 +1093,7 @@ namespace Stormancer.Tcp
             private readonly Func<IEnumerable<ITcpPeerConfigurator>> configurators;
             private readonly string id;
 
-            public bool TryGet(ReadOnlySequence<byte> operation, [NotNullWhenAttribute(true)] out OperationHandler? handler)
+            public bool TryGet(ReadOnlySequence<byte> operation, [NotNullWhen(true)] out OperationHandler? handler)
             {
                 if (!_initialized)
                 {
@@ -1281,9 +1281,9 @@ namespace Stormancer.Tcp
 
 
         /// <summary>
-        /// Id of the <see cref="TcpPeer"/> instance.
+        /// Local id of the <see cref="TcpPeer"/> instance, used for logging purpose.
         /// </summary>
-        public string Id { get; }
+        public string Id { get; } = "peer";
 
         private Stopwatch stopwatch = new Stopwatch();
         /// <summary>
@@ -1322,7 +1322,7 @@ namespace Stormancer.Tcp
 
             _processingTime = _meter.CreateHistogram<double>("stormancer.tcp.requestProcessingTime");
             _watch.Start();
-            _metadata = new Metadata();
+            _metadata = new PeerMetadata();
         }
 
         private void ConfigureInternalHandlers()
@@ -1337,10 +1337,10 @@ namespace Stormancer.Tcp
 
             var owner = _memPool.Rent(metadata.Length);
             metadata.CopyTo(owner.Memory.Span);
-            _metadata = new Metadata(_metadata.PeerId, owner, owner.Memory.Slice(0, metadata.Length));
+            _metadata = new PeerMetadata(_metadata.PeerId, owner, owner.Memory.Slice(0, metadata.Length));
         }
 
-        private Metadata _metadata;
+        private PeerMetadata _metadata;
 
 
         private static void WriteBroadcastResponseHeader(IBufferWriter<byte> writer, IPEndPoint endpoint, ushort length)
@@ -2415,7 +2415,7 @@ namespace Stormancer.Tcp
         }
 
 
-        private static void WriteBroadcastRequestHeader(IBufferWriter<byte> writer, Guid id, string operation, IPEndPoint endpoint, DateTime date, Metadata metadata)
+        private static void WriteBroadcastRequestHeader(IBufferWriter<byte> writer, Guid id, string operation, IPEndPoint endpoint, DateTime date, PeerMetadata metadata)
         {
             // IP Address | port | id | date | opLength | op |  metadata
             //     16     |  2   | 16     8         1          
@@ -2451,7 +2451,7 @@ namespace Stormancer.Tcp
 
             writer.Advance(43 + opLength);
 
-            Metadata.Write(writer, metadata);
+            PeerMetadata.Write(writer, metadata);
         }
 
         private bool TryReadBroadcastRequestHeader(ReadOnlySequence<byte> buffer, out BroadcastRequestHeader header, out int consumed)
@@ -2507,7 +2507,7 @@ namespace Stormancer.Tcp
 
 
             var operation = Encoding.UTF8.GetString(buffer.Slice(43, opLength));
-            var success = Metadata.TryRead(buffer.Slice(43 + opLength), out var metadata, out var metadataConsumed);
+            var success = PeerMetadata.TryRead(buffer.Slice(43 + opLength), out var metadata, out var metadataConsumed);
 
             if (!success)
             {
@@ -2864,11 +2864,11 @@ namespace Stormancer.Tcp
             if (isClient)
             {
 
-                Metadata.Write(connection.Output, _metadata);
+                PeerMetadata.Write(connection.Output, _metadata);
                 await connection.Output.FlushAsync();
             }
 
-            var metadata = await Metadata.ReadMetadataAsync(reader, cancellationToken);
+            var metadata = await PeerMetadata.ReadMetadataAsync(reader, cancellationToken);
 
 
             if (metadata.PeerId == _metadata.PeerId && isClient)
@@ -2880,7 +2880,7 @@ namespace Stormancer.Tcp
 
             if (!isClient)
             {
-                Metadata.Write(connection.Output, _metadata);
+                PeerMetadata.Write(connection.Output, _metadata);
                 await connection.Output.FlushAsync();
             }
 

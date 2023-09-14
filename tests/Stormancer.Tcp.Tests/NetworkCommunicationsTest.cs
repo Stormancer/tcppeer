@@ -131,7 +131,7 @@ namespace Stormancer.Tcp.Tests
 
             ReadOnlyMemory<byte> seq = TestSequence();
 
-
+            var nb = 0;
             async Task RunRequest()
             {
                 using (var request = client.Broadcast("test", default))
@@ -147,6 +147,7 @@ namespace Stormancer.Tcp.Tests
 
                     await foreach (var response in request.GetResponses())
                     {
+                        nb++;
                         var readResult = await response.Reader.ReadAtLeastAsync(SEGMENTS * 64);
                         ReadOnlyMemory<byte> array = readResult.Buffer.Slice(0, SEGMENTS * 64).ToArray();
                         Debug.Assert(seq.Span.SequenceEqual(array.Span));
@@ -164,7 +165,7 @@ namespace Stormancer.Tcp.Tests
             await Task.WhenAll(tasks);
 
             server.ShutdownServer();
-
+            Debug.Assert(nb == 2);
 
         }
 
