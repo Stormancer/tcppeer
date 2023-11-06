@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.IO.Pipelines;
 
-namespace Stormancer.Tcp
+namespace Stormancer.Networking.Reliable
 {
     /// <summary>
     /// Metadata associated with a peer.
@@ -97,7 +97,7 @@ namespace Stormancer.Tcp
             throw new OperationCanceledException();
         }
 
-        internal PeerMetadata(PeerId peerId, IMemoryOwner<byte> owner, ReadOnlyMemory<byte> metadata)
+        internal PeerMetadata(PeerId peerId, IMemoryOwner<byte>? owner, ReadOnlyMemory<byte> metadata)
         {
             PeerId = peerId;
             _owner = owner;
@@ -109,6 +109,11 @@ namespace Stormancer.Tcp
             PeerId = new PeerId();
             Content = ReadOnlyMemory<byte>.Empty;
             _owner = null;
+        }
+
+        internal static PeerMetadata CreateEmpty()
+        {
+            return new PeerMetadata(PeerId.CreateNew(), null, ReadOnlyMemory<byte>.Empty);
         }
         private readonly IMemoryOwner<byte>? _owner;
 

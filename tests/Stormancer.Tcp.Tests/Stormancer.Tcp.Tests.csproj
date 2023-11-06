@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Stormancer.Tcp\Stormancer.Tcp.csproj" />
+    <ProjectReference Include="..\..\src\Stormancer.Networking.Reliable\Stormancer.Networking.Reliable.csproj" />
   </ItemGroup>
 
 </Project>

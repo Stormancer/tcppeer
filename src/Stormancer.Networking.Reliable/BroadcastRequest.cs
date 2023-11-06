@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Stormancer.Tcp
+namespace Stormancer.Networking.Reliable
 {
     /// <summary>
     ///  A broadcast request to all peers in the mesh.

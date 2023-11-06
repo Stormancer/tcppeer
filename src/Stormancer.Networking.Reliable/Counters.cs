@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Stormancer.Tcp
+namespace Stormancer.Networking.Reliable
 {
     internal class Counters
     {

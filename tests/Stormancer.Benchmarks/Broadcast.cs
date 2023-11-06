@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 namespace Stormancer.Benchmarks
 {
     [SimpleJob(runtimeMoniker:RuntimeMoniker.Net70,  warmupCount: 3, targetCount: 10)]
-    public class Broadcast : ITcpPeerConfigurator
+    public class Broadcast : IPeerApiConfigurator
     {
         
         private const int SEGMENTS = 1;
@@ -26,10 +26,10 @@ namespace Stormancer.Benchmarks
             seq = TestSequence();
         }
 
-        void ITcpPeerConfigurator.Configure(ITcpPeerApiBuilder builder)
+        void IPeerApiConfigurator.OnRegisteringOperations(Stormancer.Tcp.PeerOperationsBuilder builder)
         {
             ReadOnlyMemory<byte> seq = TestSequence();
-            builder.ConfigureHandler("test", async ctx =>
+            builder.ConfigureOperation("test", async ctx =>
             {
                 var readResult = await ctx.Reader.ReadAtLeastAsync(SEGMENTS * 64);
 

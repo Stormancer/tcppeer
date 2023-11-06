@@ -1,11 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Company>Stormancer</Company>
     <Authors>Stormancer</Authors>
-    <Version>5.0.2.1</Version>
+    <Version>0.1.0</Version>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -24,6 +24,7 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="../../res/stormancer_128x128.png" Pack="true" PackagePath="\icon.png" />
+    <None Include="TcpPeer.cs" />
   </ItemGroup>
 
 
@@ -32,11 +33,12 @@
   </PropertyGroup>
   
   <ItemGroup>
+    <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.2.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Connections.Abstractions" Version="7.0.13" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="7.0.0" />
-    <PackageReference Include="Microsoft.Extensions.ObjectPool" Version="5.0.0" />
-    <PackageReference Include="Pipelines.Sockets.Unofficial" Version="2.2.2" />
-    <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="6.0.0" />
-    <PackageReference Include="System.IO.Pipelines" Version="6.0.3" />
+    <PackageReference Include="Microsoft.Extensions.ObjectPool" Version="7.0.13" />
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="7.0.2" />
+    <PackageReference Include="System.IO.Pipelines" Version="7.0.0" />
   </ItemGroup>
 
   
@@ -44,6 +46,7 @@
     <OldNugetPackagesTemp Include="$(ProjectDir)../../output/packages/$(ConfigurationName)/$(ProjectName)*.nupkg" />
     <NugetPackages Include="$(TargetDir)../$(ProjectName).$(Version).nupkg" />
     <Pdbs Include="$(TargetDir)*.pdb" />
+    <Compile Remove="TcpPeer.cs" />
     <Assembly Include="$(TargetDir)$(AssemblyName).dll" />
   </ItemGroup>
   <Target Name="FindOldNugetPackages" BeforeTargets="PostPack">

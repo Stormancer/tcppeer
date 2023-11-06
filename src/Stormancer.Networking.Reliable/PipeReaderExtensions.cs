@@ -6,7 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Stormancer.Tcp
+namespace Stormancer.Networking.Reliable
 {
     internal static class PipeReaderExtensions
     {

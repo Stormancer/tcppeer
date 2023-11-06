@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Options;
+using Stormancer.Tcp.Tests;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -9,462 +11,54 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace Stormancer.Tcp.Tests
+namespace Stormancer.Networking.Reliable.Tests
 {
   
-    public class NetworkCommunicationTests : ITcpPeerConfigurator
+    public class NetworkCommunicationTests
     {
-        private const int KnownErrorCode = 1023;
 
-        private const int SEGMENTS = 3;
-        void ITcpPeerConfigurator.Configure(ITcpPeerApiBuilder builder)
+        [Fact(DisplayName ="Bind")]
+        public async Task TestBind()
         {
-            ReadOnlyMemory<byte> seq = TestSequence();
-            builder.ConfigureHandler("test", async ctx =>
-            {
-                var readResult = await ctx.Reader.ReadAtLeastAsync(SEGMENTS * 64);
+            var options = new PeerOptions();
+            options.TransportsOptions.Endpoints.Add(new TransportConfiguration {  BindingEndpoint = new IPEndPoint(IPAddress.Loopback,8091) });
+            await using var client = new MeshClient(options);
 
-                ReadOnlyMemory<byte> array = readResult.Buffer.Slice(0, SEGMENTS * 64).ToArray();
-                Debug.Assert(seq.Span.SequenceEqual(array.Span));
-                ctx.Reader.AdvanceTo(readResult.Buffer.End);
-                ctx.Reader.Complete();
-
-                for (int i = 0; i < SEGMENTS; i++)
-                {
-                    await ctx.Writer.WriteAsync(array.Slice(64 * i, 64));
-                }
-
-                ctx.Writer.Complete();
-            });
-
-            builder.ConfigureHandler("connectionDrop", async ctx =>
-            {
-                //Wait for data.
-                //No data sent.
-                var readResult = await ctx.Reader.ReadAsync();
-
-
-            });
-            builder.ConfigureHandler("unknownError", ctx =>
-            {
-                throw new InvalidOperationException();
-            });
-
-            builder.ConfigureHandler("knownError", ctx =>
-            {
-                throw new RequestException(KnownErrorCode);
-            });
-        }
-        private void Log(string msg, Exception ex) { }
-        private byte[] TestSequence() => Enumerable.Range(0, SEGMENTS * 64).Select(i => (byte)i).ToArray();
-        [Fact]
-        public async Task RequestToServerTest()
-        {
-            var server = new TcpPeer("server", Log, () => new ITcpPeerConfigurator[] { this }, _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-
-            _ = server.RunAsync(new System.Net.IPEndPoint(IPAddress.Any, 0), CancellationToken.None);
-
-            var client = new TcpPeer("client", Log, () => Enumerable.Empty<ITcpPeerConfigurator>(), _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-
-            Debug.Assert(server.LocalEndpoints != null);
-
-            Debug.Assert(server.LocalEndpoints.Any());
-
-            var endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
-
-            await client.Connect(endpoint);
-
-            ReadOnlyMemory<byte> seq = TestSequence();
-
-
-            async Task RunRequest()
-            {
-                using (var request = client.Send(endpoint, "test", default))
-                {
-
-                    for (int i = 0; i < SEGMENTS; i++)
-                    {
-                        await request.Writer.WriteAsync(seq.Slice(64 * i, 64));
-                    }
-
-
-                    request.Writer.Complete();
-
-                    var readResult = await request.Reader.ReadAtLeastAsync(SEGMENTS * 64);
-
-                    ReadOnlyMemory<byte> array = readResult.Buffer.Slice(0, SEGMENTS * 64).ToArray();
-                    Debug.Assert(seq.Span.SequenceEqual(array.Span));
-                }
-            }
-            var tasks = new List<Task>();
-
-            for (int i = 0; i < 1; i++)
-            {
-                tasks.Add(RunRequest());
-            }
-
-            await Task.WhenAll(tasks);
-
-            server.ShutdownServer();
-
+            await client.StartAsync(CancellationToken.None);
 
         }
 
-
-        [Fact]
-        public async Task Broadcast()
+        [Fact(DisplayName = "Connect")]
+        public async Task TestConnect()
         {
-         
-            var server = new TcpPeer("server", Log, () => new ITcpPeerConfigurator[] { this }, _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-
-            _ = server.RunAsync(new System.Net.IPEndPoint(IPAddress.Any, 0), CancellationToken.None);
-
-            var client = new TcpPeer("client", Log, () => Enumerable.Empty<ITcpPeerConfigurator>(), _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-            _ = client.RunAsync(new System.Net.IPEndPoint(IPAddress.Any, 0), CancellationToken.None);
-            Debug.Assert(server.LocalEndpoints != null);
-
-            Debug.Assert(server.LocalEndpoints.Any());
-
-            var endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
-
-            await client.Connect(endpoint);
-
-            ReadOnlyMemory<byte> seq = TestSequence();
-
-            var nb = 0;
-            async Task RunRequest()
-            {
-                using (var request = client.Broadcast("test", default))
-                {
-
-                    for (int i = 0; i < SEGMENTS; i++)
-                    {
-                        await request.Writer.WriteAsync(seq.Slice(64 * i, 64));
-                    }
-
-
-                    request.Writer.Complete();
-
-                    await foreach (var response in request.GetResponses())
-                    {
-                        nb++;
-                        var readResult = await response.Reader.ReadAtLeastAsync(SEGMENTS * 64);
-                        ReadOnlyMemory<byte> array = readResult.Buffer.Slice(0, SEGMENTS * 64).ToArray();
-                        Debug.Assert(seq.Span.SequenceEqual(array.Span));
-                        response.Reader.Complete();
-                    }
-                }
-            }
-            var tasks = new List<Task>();
-
-            for (int i = 0; i < 1; i++)
-            {
-                tasks.Add(RunRequest());
-            }
-
-            await Task.WhenAll(tasks);
-
-            server.ShutdownServer();
-            Debug.Assert(nb == 2);
-
-        }
-
-        [Fact]
-        public async Task BroadcastChain()
-        {
-            var nbPeers = 20;
+            var serverEndpoint = new IPEndPoint(IPAddress.Loopback, 8091);
+            var notifier1 = new ConnectionSuccessNotifier();
            
+            var options1 = new PeerOptions();
+            options1.TransportsOptions.UseConnectionSuccessMiddleware(notifier1);
 
-            IPEndPoint? endpoint = null;
-            TcpPeer[] servers = new TcpPeer[nbPeers];
-            
-            for (int i = 0; i < nbPeers; i++)
-            {
-                var server = new TcpPeer("server", Log, () => new ITcpPeerConfigurator[] { this }, _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
+            options1.TransportsOptions.Endpoints.Add(new TransportConfiguration { BindingEndpoint = serverEndpoint });
+            await using var client1 = new MeshClient(options1);
 
-                _ = server.RunAsync(new System.Net.IPEndPoint(IPAddress.Any, 0), CancellationToken.None);
-                if (endpoint != null)
-                {
-                    await server.Connect(endpoint);
-                }
-                endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
+            var options2 = new PeerOptions();
+            var notifier2 = new ConnectionSuccessNotifier();
+            options2.TransportsOptions.UseConnectionSuccessMiddleware(notifier2);
+            options2.TransportsOptions.Endpoints.Add(new TransportConfiguration { BindingEndpoint = new IPEndPoint(IPAddress.Loopback, 8092) });
+            await using var client2 = new MeshClient(options2);
 
-                servers[i] = server;
-            }
+            await client1.StartAsync(CancellationToken.None);
+            await client2.StartAsync(CancellationToken.None);
 
-            
-
-            ReadOnlyMemory<byte> seq = TestSequence();
+            await client2.ConnectAsync(serverEndpoint, CancellationToken.None);
 
 
-            async Task RunRequest(TcpPeer server)
-            {
-                var watch = new Stopwatch();
-                watch.Start();
-                using (var request = server.Broadcast("test", default))
-                {
-
-                    for (int i = 0; i < SEGMENTS; i++)
-                    {
-                        await request.Writer.WriteAsync(seq.Slice(64 * i, 64));
-                    }
-
-
-                    request.Writer.Complete();
-
-                    var nbResponses = 0;
-                    await foreach (var response in request.GetResponses())
-                    {
-                        var readResult = await response.Reader.ReadAtLeastAsync(SEGMENTS * 64);
-                        ReadOnlyMemory<byte> array = readResult.Buffer.Slice(0, SEGMENTS * 64).ToArray();
-                        Debug.Assert(seq.Span.SequenceEqual(array.Span));
-                        response.Reader.Complete();
-                        nbResponses++;
-                    }
-
-                    Debug.Assert(nbResponses == nbPeers);
-                }
-                Debug.WriteLine(watch.ElapsedMilliseconds);
-                
-            }
-            var tasks = new List<Task>();
-
-            for (int i = 0; i < 1; i++)
-            {
-                await (RunRequest(servers[0]));
-            }
-
-            await Task.WhenAll(tasks);
-
-            foreach (var server in servers)
-            {
-                server.ShutdownServer();
-            }
-
-
+            await notifier1.WaitAsync(TimeSpan.FromSeconds(1));
+            await notifier2.WaitAsync(TimeSpan.FromSeconds(1));
         }
 
 
-        [Fact]
-        public async Task RequestToClientTest()
-        {
-            IPEndPoint? clientEndpoint = null;
-          
-            var server = new TcpPeer("server", Log, () => new ITcpPeerConfigurator[] { this }, _ => { }, _ => Task.CompletedTask, remotePeer => { clientEndpoint = remotePeer.Endpoint; }, (_, _) => { });
 
-            _ = server.RunAsync(new System.Net.IPEndPoint(IPAddress.Any, 0), CancellationToken.None);
-
-            var client = new TcpPeer("client", Log, () => new ITcpPeerConfigurator[] { this }, _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-
-            Debug.Assert(server.LocalEndpoints != null);
-
-            Debug.Assert(server.LocalEndpoints.Any());
-
-            var endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
-            await client.Connect(endpoint);
-            //Connecting must have updated clientEndpoint.
-            Debug.Assert(clientEndpoint != null);
-
-
-            ReadOnlyMemory<byte> seq = TestSequence();
-
-
-            using (var request = server.Send(clientEndpoint, "test", default))
-            {
-                for (int i = 0; i < SEGMENTS; i++)
-                {
-                    await request.Writer.WriteAsync(seq.Slice(64 * i, 64));
-                }
-
-
-                request.Writer.Complete();
-
-                var readResult = await request.Reader.ReadAtLeastAsync(SEGMENTS * 64);
-
-                ReadOnlyMemory<byte> array = readResult.Buffer.Slice(0, SEGMENTS * 64).ToArray();
-                Debug.Assert(seq.Span.SequenceEqual(array.Span));
-            }
-
-            server.ShutdownServer();
-
-        }
-
-
-        [Fact]
-        public async Task ConnectionLostTestClient()
-        {
-            
-            var server = new TcpPeer("server", Log, () => new ITcpPeerConfigurator[] { this }, _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-
-            _ = server.RunAsync(new System.Net.IPEndPoint(IPAddress.Any, 0), CancellationToken.None);
-
-            var client = new TcpPeer("client", Log, () => Enumerable.Empty<ITcpPeerConfigurator>(), _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-
-            Debug.Assert(server.LocalEndpoints != null);
-
-            Debug.Assert(server.LocalEndpoints.Any());
-
-            var endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
-            await client.Connect(endpoint);
-
-
-            static async Task SendRequest(TcpPeer client, IPEndPoint serverEndpoint)
-            {
-
-                using (var request = client.Send(serverEndpoint, "connectionDrop", default))
-                {
-
-                    await request.Reader.ReadAsync();
-                }
-
-
-            }
-
-            var t = SendRequest(client, endpoint);
-            server.ShutdownServer();
-
-            try
-            {
-                await t;
-            }
-            catch (RequestException ex) when (ex.Code == TcpRequestErrorCodes.ConnectionLost)
-            {
-
-            }
-        }
-
-
-        [Fact]
-        public async Task OperationNotFoundTest()
-        {
-          
-            var server = new TcpPeer("server", Log, () => new ITcpPeerConfigurator[] { this }, _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-
-            _ = server.RunAsync(new System.Net.IPEndPoint(IPAddress.Any, 0), CancellationToken.None);
-
-            var client = new TcpPeer("client", Log, () => Enumerable.Empty<ITcpPeerConfigurator>(), _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-
-            Debug.Assert(server.LocalEndpoints != null);
-
-            Debug.Assert(server.LocalEndpoints.Any());
-
-            var endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
-            await client.Connect(endpoint);
-
-
-            static async Task SendRequest(TcpPeer client, IPEndPoint serverEndpoint)
-            {
-
-                using (var request = client.Send(serverEndpoint, "notFound", default))
-                {
-
-                    await request.Reader.ReadAsync();
-                }
-
-
-            }
-
-            var t = SendRequest(client, endpoint);
-
-            try
-            {
-                await t;
-            }
-            catch (RequestException ex) when (ex.Code == TcpRequestErrorCodes.OperationNotFound)
-            {
-
-            }
-
-            server.ShutdownServer();
-        }
-
-
-        [Fact]
-        public async Task UnknwownOperationErrorTest()
-        {
-        
-            var server = new TcpPeer("server", Log, () => new ITcpPeerConfigurator[] { this }, _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-
-            _ = server.RunAsync(new System.Net.IPEndPoint(IPAddress.Any, 0), CancellationToken.None);
-
-            var client = new TcpPeer("client", Log, () => Enumerable.Empty<ITcpPeerConfigurator>(), _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-
-            Debug.Assert(server.LocalEndpoints != null);
-
-            Debug.Assert(server.LocalEndpoints.Any());
-
-            var endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
-            await client.Connect(endpoint);
-
-
-            static async Task SendRequest(TcpPeer client, IPEndPoint serverEndpoint)
-            {
-
-                using (var request = client.Send(serverEndpoint, "unknownError", default))
-                {
-
-                    await request.Reader.ReadAsync();
-                }
-
-
-            }
-
-            var t = SendRequest(client, endpoint);
-
-            try
-            {
-                await t;
-            }
-            catch (RequestException ex) when (ex.Code == TcpRequestErrorCodes.OperationError)
-            {
-               
-            }
-
-            server.ShutdownServer();
-        }
-
-
-        [Fact]
-        public async Task KnwownOperationErrorTest()
-        {
-           
-            var server = new TcpPeer("server", Log, () => new ITcpPeerConfigurator[] { this }, _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-
-            _ = server.RunAsync(new System.Net.IPEndPoint(IPAddress.Any, 0), CancellationToken.None);
-
-            var client = new TcpPeer("client", Log, () => Enumerable.Empty<ITcpPeerConfigurator>(), _ => { }, _ => Task.CompletedTask, _ => { }, (_, _) => { });
-
-            Debug.Assert(server.LocalEndpoints.Any());
-
-            var endpoint = new IPEndPoint(IPAddress.Loopback, server.LocalEndpoints.First().Port);
-            await client.Connect(endpoint);
-
-
-            static async Task SendRequest(TcpPeer client, IPEndPoint serverEndpoint)
-            {
-
-                using (var request = client.Send(serverEndpoint, "knownError", default))
-                {
-
-                    await request.Reader.ReadAsync();
-                }
-
-
-            }
-
-            var t = SendRequest(client, endpoint);
-
-            try
-            {
-                await t;
-            }
-            catch (RequestException ex) when (ex.Code == KnownErrorCode)
-            {
-
-            }
-
-            server.ShutdownServer();
-        }
+  
 
     }
 
