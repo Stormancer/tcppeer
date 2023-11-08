@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -19,10 +20,11 @@ namespace Stormancer.Networking.Reliable
     public class RemotePeer
     {
 
-        internal RemotePeer(PeerMetadata metadata, PeerId id)
+        internal RemotePeer(PeerMetadata metadata, EndPoint endPoint)
         {
             Metadata = metadata;
-            Id = id;
+            Endpoint = endPoint;
+            Id = metadata.PeerId;
         }
 
 
@@ -32,8 +34,13 @@ namespace Stormancer.Networking.Reliable
         public PeerMetadata Metadata { get; }
 
         /// <summary>
-        /// Gets th id of the peer in the cluster.
+        /// Gets the id of the peer in the cluster.
         /// </summary>
         public PeerId Id { get; }
+
+        /// <summary>
+        /// Gets the endpoint used to connect to the peer.
+        /// </summary>
+        public EndPoint Endpoint {get;}
     }
 }

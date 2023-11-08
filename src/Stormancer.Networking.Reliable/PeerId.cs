@@ -87,6 +87,15 @@ namespace Stormancer.Networking.Reliable
         }
 
         /// <summary>
+        /// Gets a string visualization
+        /// </summary>
+        /// <returns></returns>
+        public override string ToString()
+        {
+            return Value.ToString();
+        }
+
+        /// <summary>
         /// Creates an empty peerId.
         /// </summary>
         public PeerId()

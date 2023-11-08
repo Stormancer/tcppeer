@@ -1,4 +1,6 @@
-﻿using Stormancer.Networking.Reliable.Tcp;
+﻿using Stormancer.Networking.Reliable.Requests;
+using Stormancer.Networking.Reliable.Routing;
+using Stormancer.Networking.Reliable.Tcp;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
@@ -23,6 +25,8 @@ namespace Stormancer.Networking.Reliable
         private readonly Counters _counters;
 
         private readonly HandlerStore _handlers;
+        private readonly RouteTable _routeTable;
+        private readonly ServiceContext _serviceContext;
         private PeerImpl _peer;
 
         /// <summary>
@@ -35,6 +39,7 @@ namespace Stormancer.Networking.Reliable
             _pipeOptions = new PipeOptions(_configuration.MemoryPool);
             _counters = new Counters(_configuration.Name);
             _handlers = new HandlerStore(_configuration.OperationConfiguratorsGetter);
+
             if (_configuration.Metadata == null)
             {
                 Metadata = PeerMetadata.CreateEmpty();
@@ -43,25 +48,26 @@ namespace Stormancer.Networking.Reliable
             {
                 Metadata = _configuration.Metadata;
             }
-        
+            _routeTable = new RouteTable(Metadata.PeerId);
 
-            //_handlers.Initialize(Metadata);
 
-            CreateInternalPeer();
-
-        }
-
-        [MemberNotNull("_peer")]
-        private void CreateInternalPeer()
-        {
             var socketOptions = _configuration.TransportsOptions.Features.Get<SocketTransportOptions>() ?? new SocketTransportOptions();
             var networkConnectionFactory = new TcpNetworkConnectionFactory(socketOptions, _configuration.LoggerFactory);
             var tcpSocketFactory = new TcpSocketFactory(_configuration.LoggerFactory, networkConnectionFactory, socketOptions);
             var transportsFactories = new[] { tcpSocketFactory };
 
-            _peer = new PeerImpl(Metadata,transportsFactories.Cast<IConnectionListenerFactory>(), transportsFactories.Cast<IClientConnectionFactory>(), _configuration.TransportsOptions, _configuration.LoggerFactory);
-        }
+            var requestProcessor = new RequestFrameProcessor();
 
+
+            var connectionManager = new ConnectionManager(_configuration.LoggerFactory);
+            var transportManager = new TransportManager(transportsFactories.Cast<IConnectionListenerFactory>(), transportsFactories.Cast<IClientConnectionFactory>(), connectionManager, _configuration.LoggerFactory);
+
+            _serviceContext = new ServiceContext(_configuration.LoggerFactory, requestProcessor, connectionManager, transportManager,_routeTable);
+            //_handlers.Initialize(Metadata);
+
+          
+            _peer = new PeerImpl(Metadata, _configuration.TransportsOptions, _configuration.MemoryPool, _serviceContext);
+        }
 
         /// <summary>
         /// Gets metadata of the local peer.
@@ -73,6 +79,10 @@ namespace Stormancer.Networking.Reliable
         /// </summary>
         public PeerId Id => Metadata.PeerId;
 
+        /// <summary>
+        /// Gets the list of the currently connected peers.
+        /// </summary>
+        public IEnumerable<RemotePeer> ConnectedPeers => _serviceContext.ConnectionManager.GetPeers();
 
         /// <summary>
         /// Starts the peer and bind to the local address.
@@ -92,8 +102,8 @@ namespace Stormancer.Networking.Reliable
         /// <returns></returns>
         public Task ConnectAsync(IPEndPoint serverEndpoint, CancellationToken cancellationToken)
         {
-          
-            return _peer.ConnectAsync(serverEndpoint,cancellationToken);
+
+            return _peer.ConnectAsync(serverEndpoint, cancellationToken);
         }
 
         /// <summary>
@@ -160,14 +170,6 @@ namespace Stormancer.Networking.Reliable
             return new BroadcastRequest();
         }
 
-        /// <inheritdoc/>
-        public ValueTask DisposeAsync()
-        {
-            return _peer.DisposeAsync();
-        }
-
-
-
         internal void StartRequest(PeerRequest peerRequest, Pipe contentPipe, Pipe responsePipe)
         {
             //_counters.Sent.Add(1);
@@ -181,6 +183,37 @@ namespace Stormancer.Networking.Reliable
 
         }
 
-      
+        /// <summary>
+        /// Determines if the current peer currently knows a route to another peer.
+        /// </summary>
+        /// <param name="destination"></param>
+        /// <param name="hops"></param>
+        /// <returns></returns>
+        public bool HasRoute(PeerId destination, out int hops)
+        {
+            if (_routeTable.TryGetRoute(destination, out var route))
+            {
+                hops = route.Hops;
+                return true;
+            }
+            else
+            {
+                hops = -1;
+                return false;
+            }
+        }
+
+
+        /// <inheritdoc/>
+        public ValueTask DisposeAsync()
+        {
+            return _peer.DisposeAsync();
+        }
+
+
+
+
+
+
     }
 }

@@ -1,7 +1,10 @@
 ﻿using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging;
 using Stormancer.Networking.Reliable.Features;
+using Stormancer.Networking.Reliable.Requests;
+using Stormancer.Networking.Reliable.Routing;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -24,21 +27,25 @@ namespace Stormancer.Networking.Reliable
 
         public PeerImpl(
             PeerMetadata localPeer
-            , IEnumerable<IConnectionListenerFactory> transportFactories
-            , IEnumerable<IClientConnectionFactory> clientFactories
             , TransportsOptions transportsConfiguration
-            , ILoggerFactory loggerFactory)
+            , MemoryPool<byte> memoryPool
+            , ServiceContext serviceContext)
         {
             _localPeer = localPeer;
             _transportsConfiguration = transportsConfiguration;
 
-            _loggerFactory = loggerFactory;
+            _loggerFactory = serviceContext.LoggerFactory;
             _logger = _loggerFactory.CreateLogger<PeerImpl>();
 
-            _connectionManager = new ConnectionManager(_loggerFactory);
-            _transportManager = new TransportManager(transportFactories, clientFactories, _connectionManager, _loggerFactory);
+            _connectionManager = serviceContext.ConnectionManager;
+            _transportManager = serviceContext.TransportManager;
 
-            _transportsConfiguration.UseMetadataExchange();
+            _transportsConfiguration.Features.Set<IMemoryPoolFeature>(new DefaultMemoryPoolFeature(memoryPool));
+            _transportsConfiguration
+                .UseMetadataExchange()
+                .UseRouteTableMiddleware(serviceContext.RouteTable)
+                .UseRequestServer(serviceContext);
+
 
         }
 
@@ -78,7 +85,7 @@ namespace Stormancer.Networking.Reliable
             var feature = endPointConfig.Features.Get<IPeerConnectionFeature>();
             Debug.Assert(feature != null);
 
-            await feature.WhenMetadataExchangedAsync().WaitAsync(cancellationToken);
+            await feature.WhenStartingProcessingData().WaitAsync(cancellationToken);
         }
 
         public async ValueTask DisposeAsync()

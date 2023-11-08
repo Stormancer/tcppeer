@@ -15,12 +15,12 @@ namespace Stormancer.Networking.Reliable.Features
         /// <summary>
         /// Gets the local endpoint of the connection.
         /// </summary>
-        public EndPoint LocalEndPoint { get; }
+        public EndPoint? LocalEndPoint { get; }
 
         /// <summary>
         /// Gets the remote endpoint of the connection.
         /// </summary>
-        public EndPoint RemoteEndPoint { get; }
+        public EndPoint? RemoteEndPoint { get; }
 
         /// <summary>
         /// Gets the metadata of the local peer.
@@ -42,6 +42,12 @@ namespace Stormancer.Networking.Reliable.Features
         /// </summary>
         /// <returns></returns>
         public Task WhenMetadataExchangedAsync();
+
+        /// <summary>
+        /// Wait asynchronously that the connection is ready to process data.
+        /// </summary>
+        /// <returns></returns>
+        public Task WhenStartingProcessingData();
     }
 
 
@@ -61,7 +67,14 @@ namespace Stormancer.Networking.Reliable.Features
         {
             return _metadataExchangedTcs.Task;
         }
-
         internal void SetMetadataExchanged() => _metadataExchangedTcs.SetResult();
+
+
+        private readonly TaskCompletionSource _readyToProcessData = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task WhenStartingProcessingData()
+        {
+            return _readyToProcessData.Task;
+        }
+        internal void SetReadyToProcessData() => _readyToProcessData.SetResult();
     }
 }

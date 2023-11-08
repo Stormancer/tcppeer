@@ -154,7 +154,7 @@ namespace Stormancer.Networking.Reliable
 
 
          
-            //Probably doesn't make sense to use FrozenDictionary because of the number of operations, but we should probably keep that in mind while profiling.
+            //Probably doesn't make sense to use FrozenDictionary because of the number of operations, but we should keep that in mind while profiling.
             for(int i = 0; i< Handlers.Length; i++)
             {
                 var candidate = Handlers[i];

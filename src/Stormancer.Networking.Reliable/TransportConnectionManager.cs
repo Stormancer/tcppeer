@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Connections;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using System.Linq;
+using Stormancer.Networking.Reliable.Features;
 
 namespace Stormancer.Networking.Reliable
 {
@@ -178,12 +180,35 @@ namespace Stormancer.Networking.Reliable
                 {
                     // It's safe to modify the ConcurrentDictionary in the foreach.
                     // The connection reference has become unrooted because the application never completed.
-                    PeerLogs.ApplicationNeverCompleted(_logger,reference.ConnectionId);
+                    PeerLogs.ApplicationNeverCompleted(_logger, reference.ConnectionId);
                     reference.StopTransportTracking();
                 }
 
             }
         }
+
+        public IEnumerable<RemotePeer> GetPeers()
+        {
+            foreach (var (key, reference) in _connectionReferences)
+            {
+                if (reference.TryGetConnection(out var connection))
+                {
+                    var feature = connection.NetworkConnection.Features.Get<IPeerConnectionFeature>();
+                    if (feature != null && feature.RemotePeerMetadata != null)
+                    {
+                        yield return new RemotePeer(feature.RemotePeerMetadata, feature.RemoteEndPoint);
+                    }
+                }
+                else
+                {
+                    // It's safe to modify the ConcurrentDictionary in the foreach.
+                    // The connection reference has become unrooted because the application never completed.
+                    PeerLogs.ApplicationNeverCompleted(_logger, reference.ConnectionId);
+                    reference.StopTransportTracking();
+                }
+            }
+        }
+
 
 
     }
